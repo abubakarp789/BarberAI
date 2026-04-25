@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    // Validation definitions
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
+             data.keys().size() == 5 &&
+             data.uid == request.auth.uid &&
+             data.role in ['barber', 'customer'] &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidBarberCreation(data) {
+      return data.keys().hasAll(['uid', 'name', 'shopName', 'location', 'bio', 'services', 'portfolioImages', 'availability', 'rating', 'totalReviews', 'isActive']) &&
+             data.keys().size() == 11 &&
+             data.uid == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.shopName is string && data.shopName.size() <= 100 &&
+             data.location is string && data.location.size() <= 200 &&
+             data.bio is string && data.bio.size() <= 1000 &&
+             data.services is list && data.services.size() <= 50 &&
+             data.portfolioImages is list && data.portfolioImages.size() <= 50 &&
+             data.rating is number && data.rating >= 0 && data.rating <= 5 &&
+             data.totalReviews is number && data.totalReviews >= 0 &&
+             data.isActive is bool;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['customerId', 'customerName', 'barberId', 'barberName', 'date', 'time', 'service', 'status', 'createdAt']) &&
+             (data.keys().size() == 9 || (data.keys().size() == 10 && data.keys().hasAll(['haircutBrief']))) &&
+             data.customerId == request.auth.uid &&
+             data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
+             data.date is string && data.date.size() <= 20 &&
+             data.time is string && data.time.size() <= 20 &&
+             data['service'] is string && data['service'].size() <= 100 &&
+             data.createdAt == request.time &&
+             (data.keys().hasAll(['haircutBrief']) ? (
+               data.haircutBrief is map && 
+               (
+                 // Case 1: Has full style brief
+                 (data.haircutBrief.keys().hasAll(['faceShape', 'recommendedStyle', 'styleDescription']) && 
+                  data.haircutBrief.faceShape is string && data.haircutBrief.faceShape.size() <= 100 &&
+                  data.haircutBrief.recommendedStyle is string && data.haircutBrief.recommendedStyle.size() <= 100 &&
+                  data.haircutBrief.styleDescription is string && data.haircutBrief.styleDescription.size() <= 1000)
+                 ||
+                 // Case 2: Only has note
+                 (data.haircutBrief.keys().hasAll(['note']) && data.haircutBrief.keys().size() == 1)
+               ) &&
+               // Optional note for Case 1
+               (data.haircutBrief.keys().hasAll(['note']) ? (data.haircutBrief.note is string && data.haircutBrief.note.size() <= 1000) : true)
+             ) : true);
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['bookingId', 'customerId', 'barberId', 'rating', 'comment', 'createdAt']) &&
+             data.keys().size() == 6 &&
+             data.customerId == request.auth.uid &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() <= 1000 &&
+             data.createdAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming()) && incoming().createdAt == existing().createdAt && incoming().diff(existing()).affectedKeys().hasOnly(['name']);
+      allow list: if false; // PII isolated
+    }
+
+    match /barbers/{barberId} {
+      allow read: if isValidId(barberId);
+      allow list: if true;
+      allow create: if isSignedIn() && request.auth.uid == barberId && isValidId(barberId) && isValidBarberCreation(incoming());
+      allow update: if isSignedIn() && isValidId(barberId) && isValidBarberCreation(incoming()) &&
+        (
+          (request.auth.uid == barberId && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'shopName', 'location', 'bio', 'services', 'portfolioImages', 'availability', 'isActive']))
+          ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'totalReviews']) && incoming().totalReviews == existing().totalReviews + 1)
+        );
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && isValidId(bookingId) && (existing().customerId == request.auth.uid || existing().barberId == request.auth.uid);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming()) && incoming().status == 'pending' &&
+        exists(/databases/$(database)/documents/barbers/$(incoming().barberId));
+      
+      allow update: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming()) && incoming().createdAt == existing().createdAt &&
+        (
+          // Customer cancels
+          (existing().customerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'cancelled' && existing().status != 'cancelled' && existing().status != 'completed')
+          ||
+          // Barber updates status
+          (existing().barberId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status in ['confirmed', 'completed', 'cancelled'] && existing().status != 'cancelled' && existing().status != 'completed')
+        );
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if isValidId(reviewId);
+      allow list: if true;
+      allow create: if isSignedIn() && isValidId(reviewId) && isValidReview(incoming()) &&
+        get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.status == 'completed' &&
+        get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.customerId == request.auth.uid;
+      allow update: if false; // Reviews are immutable
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the BarberAI app",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["barber", "customer"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Barber": {
+      "title": "Barber",
+      "description": "A barber's public profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "shopName": { "type": "string" },
+        "location": { "type": "string" },
+        "bio": { "type": "string" },
+        "services": { "type": "array" },
+        "portfolioImages": { "type": "array" },
+        "availability": { "type": "object" },
+        "rating": { "type": "number" },
+        "totalReviews": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": []
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A haircut booking",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "barberId": { "type": "string" },
+        "barberName": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "service": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "haircutBrief": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerId", "barberId", "date", "time", "service", "status"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A review for a completed booking",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "barberId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["bookingId", "customerId", "barberId", "rating"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles with role"
+    },
+    "/barbers/{barberId}": {
+      "schema": { "$ref": "Barber" },
+      "description": "Barber public profiles"
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "Booking" },
+      "description": "Haircut appointments"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "Review" },
+      "description": "Customer reviews for barcodes"
+    }
+  }
+}

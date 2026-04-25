@@ -49,7 +49,11 @@ export default function Register() {
       }, 500);
     } catch (error: any) {
       console.error(error);
-      toast.error('Google Sign-In failed');
+      if (error.code === 'auth/operation-not-allowed') {
+        toast.error('Google Sign-In is not enabled in Firebase Console.', { duration: 5000 });
+      } else {
+        toast.error(error.message || 'Google Sign-In failed');
+      }
     } finally {
       setLoading(false);
     }

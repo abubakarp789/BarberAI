@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { Scissors, Compass, Calendar, Sparkles, User, LayoutDashboard, Settings, Image as ImageIcon, LogOut, Menu, X } from 'lucide-react';
+import { Scissors, Compass, Calendar, Sparkles, User, LayoutDashboard, Settings, Image as ImageIcon, LogOut, Menu, X, Eye } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
 
@@ -83,6 +83,7 @@ export default function Navbar() {
     { to: '/barber-bookings', icon: Calendar, label: 'Bookings' },
     { to: '/setup-profile', icon: Settings, label: 'Setup Profile' },
     { to: '/portfolio', icon: ImageIcon, label: 'Portfolio' },
+    { to: '/barber-profile', icon: Eye, label: 'View Profile' },
   ];
 
   const links = userData.role === 'customer' ? customerLinks : barberLinks;

@@ -12,7 +12,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
 
   // API routes
   app.get("/api/health", (req, res) => {
@@ -85,7 +85,7 @@ Respond ONLY with a JSON object in this exact format, with no markdown:
 }`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt
       });
 

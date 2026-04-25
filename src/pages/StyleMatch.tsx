@@ -1,245 +1,300 @@
-import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { Sparkles, Scissors, User as UserIcon, Loader2, ArrowRight, Check } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
+import { useState, useRef } from 'react';
+import { Sparkles, Upload, Camera, Loader2, ArrowRight, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-export default function StyleMatch() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  
-  const [preferences, setPreferences] = useState({
-    faceShape: '',
-    hairType: '',
-    maintenance: '',
-    styleVibe: ''
-  });
+interface Recommendation {
+  styleName: string;
+  description: string;
+  whySuited: string;
+  referenceKeyword: string;
+}
 
-  const handleSelect = (key: keyof typeof preferences, value: string) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
+interface AnalysisResult {
+  faceShape: string;
+  faceShapeDescription: string;
+  recommendations: Recommendation[];
+  error?: string;
+}
+
+export default function StyleMatch() {
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<Recommendation | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPG or PNG)');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be smaller than 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setImagePreview(dataUrl);
+      // Extract base64 data without the data:image/xxx;base64, prefix
+      const base64 = dataUrl.split(',')[1];
+      setImageBase64(base64);
+      // Reset previous results
+      setResult(null);
+      setSelectedStyle(null);
+      setSaved(false);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const getRecommendations = async () => {
-    if (!preferences.faceShape || !preferences.hairType || !preferences.maintenance || !preferences.styleVibe) {
-      return toast.error("Please answer all questions");
-    }
+  const analyzeFace = async () => {
+    if (!imageBase64) return;
 
     try {
       setLoading(true);
-      // Call the server endpoint for Gemini since we should secure the API key
-      const response = await fetch('/api/style-match', {
+      const response = await fetch('/api/analyze-face', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferences })
+        body: JSON.stringify({ imageBase64 }),
       });
-      
+
       if (!response.ok) {
-        throw new Error("Failed to get response");
+        const errData = await response.json();
+        throw new Error(errData.error || 'Analysis failed');
       }
-      
+
       const data = await response.json();
-      
-      // Attempt to parse if it's a string, or it might already be JSON
+
       let parsed = data.result;
       if (typeof parsed === 'string') {
         const cleaned = parsed.replace(/```json\n?|\n?```/g, '').trim();
         parsed = JSON.parse(cleaned);
       }
-      
+
+      if (parsed.error) {
+        toast.error(parsed.error);
+        return;
+      }
+
       setResult(parsed);
-      setStep(5);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Failed to get style recommendations. Please try again.');
+      toast.error(error.message || 'Failed to analyze face. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const attachToBooking = () => {
-    // We can store this in localStorage and retrieve it on the booking page
-    localStorage.setItem('styleMatchBrief', JSON.stringify({
-      faceShape: preferences.faceShape,
-      recommendedStyle: result.recommendedStyle,
-      styleDescription: result.description,
-      barberInstructions: result.barberInstructions
-    }));
-    toast.success("Style Brief Saved!");
-    navigate('/explore');
+  const selectStyle = (rec: Recommendation) => {
+    setSelectedStyle(rec);
+    const brief = {
+      faceShape: result?.faceShape,
+      recommendedStyle: rec.styleName,
+      styleDescription: rec.description,
+    };
+    localStorage.setItem('activeBrief', JSON.stringify(brief));
+    setSaved(true);
+    toast.success('Style saved! Attach it to your next booking.');
   };
 
-  const StepIndicator = () => (
-    <div className="flex justify-center gap-2 mb-8">
-      {[1, 2, 3, 4].map(i => (
-        <div key={i} className={`h-2 rounded-full transition-all ${step === i ? 'w-8 bg-[#e94560]' : step > i ? 'w-4 bg-green-500' : 'w-4 bg-white/10'}`}></div>
-      ))}
-    </div>
-  );
+  const resetAll = () => {
+    setImagePreview(null);
+    setImageBase64(null);
+    setResult(null);
+    setSelectedStyle(null);
+    setSaved(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-3xl mx-auto pb-12">
+      {/* Header */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-[#e94560] to-purple-600 mb-4 shadow-[0_0_30px_rgba(233,69,96,0.3)]">
           <Sparkles size={28} className="text-white" />
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-[#eaeaea]">AI Style Match</h1>
-        <p className="text-[#a0a0b0] mt-2">Find the perfect haircut based on your specific features.</p>
+        <p className="text-[#a0a0b0] mt-2">
+          Upload a photo and let AI find the perfect hairstyle for your face shape.
+        </p>
       </div>
 
-      {step < 5 && <StepIndicator />}
-
-      <div className="bg-[#16213e] p-6 sm:p-10 rounded-3xl border border-white/5 relative overflow-hidden">
-        {loading && (
-          <div className="absolute inset-0 bg-[#16213e]/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
-            <Loader2 size={48} className="text-[#e94560] animate-spin mb-4" />
-            <p className="font-bold text-lg animate-pulse text-[#eaeaea]">Analyzing your profile...</p>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-            <h2 className="text-2xl font-bold mb-6 text-center">What is your face shape?</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {['Oval', 'Square', 'Round', 'Diamond', 'Heart', 'Oblong'].map(shape => (
-                <button
-                  key={shape}
-                  onClick={() => handleSelect('faceShape', shape)}
-                  className={`p-4 rounded-xl border-2 text-center font-medium transition-all ${preferences.faceShape === shape ? 'border-[#e94560] bg-[#e94560]/10 text-white' : 'border-white/5 bg-black/20 text-[#a0a0b0] hover:bg-white/5'}`}
-                >
-                  {shape}
-                </button>
-              ))}
-            </div>
-            <div className="mt-8 flex justify-end">
-              <button disabled={!preferences.faceShape} onClick={() => setStep(2)} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg font-bold disabled:opacity-50 transition-all hover:bg-gray-200">
-                Next <ArrowRight size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-            <h2 className="text-2xl font-bold mb-6 text-center">What is your hair type?</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                { id: 'Straight', desc: 'Lays flat, smooth' },
-                { id: 'Wavy', desc: 'Loose ' },
-                { id: 'Curly', desc: 'Coiled, lots of volume' },
-                { id: 'Thinning', desc: 'Receding or light density' }
-              ].map(type => (
-                <button
-                  key={type.id}
-                  onClick={() => handleSelect('hairType', type.id)}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${preferences.hairType === type.id ? 'border-[#e94560] bg-[#e94560]/10' : 'border-white/5 bg-black/20 hover:bg-white/5'}`}
-                >
-                  <div className={`font-bold ${preferences.hairType === type.id ? 'text-white' : 'text-[#eaeaea]'}`}>{type.id}</div>
-                  <div className="text-sm text-[#a0a0b0] mt-1">{type.desc}</div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-8 flex justify-between">
-              <button onClick={() => setStep(1)} className="text-[#a0a0b0] hover:text-white font-medium px-4 py-2">Back</button>
-              <button disabled={!preferences.hairType} onClick={() => setStep(3)} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg font-bold disabled:opacity-50 transition-all hover:bg-gray-200">
-                Next <ArrowRight size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-            <h2 className="text-2xl font-bold mb-6 text-center">How much time do you spend styling?</h2>
-            <div className="flex flex-col gap-3">
-              {[
-                { id: 'Low', desc: 'Wash and go, minimal products (1-2 mins)' },
-                { id: 'Medium', desc: 'A quick blow dry or some pomade (3-5 mins)' },
-                { id: 'High', desc: 'Full styling routine, precise hold (5+ mins)' }
-              ].map(level => (
-                <button
-                  key={level.id}
-                  onClick={() => handleSelect('maintenance', level.id)}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${preferences.maintenance === level.id ? 'border-[#e94560] bg-[#e94560]/10' : 'border-white/5 bg-black/20 hover:bg-white/5'}`}
-                >
-                  <div className={`font-bold ${preferences.maintenance === level.id ? 'text-white' : 'text-[#eaeaea]'}`}>{level.id} Maintenance</div>
-                  <div className="text-sm text-[#a0a0b0] mt-1">{level.desc}</div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-8 flex justify-between">
-              <button onClick={() => setStep(2)} className="text-[#a0a0b0] hover:text-white font-medium px-4 py-2">Back</button>
-              <button disabled={!preferences.maintenance} onClick={() => setStep(4)} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg font-bold disabled:opacity-50 transition-all hover:bg-gray-200">
-                Next <ArrowRight size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-            <h2 className="text-2xl font-bold mb-6 text-center">What's your desired vibe?</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {['Professional', 'Trendy/Modern', 'Classic', 'Edgy', 'Sporty'].map(vibe => (
-                <button
-                  key={vibe}
-                  onClick={() => handleSelect('styleVibe', vibe)}
-                  className={`p-4 rounded-xl border-2 text-center font-medium transition-all ${preferences.styleVibe === vibe ? 'border-[#e94560] bg-[#e94560]/10 text-white' : 'border-white/5 bg-black/20 text-[#a0a0b0] hover:bg-white/5'}`}
-                >
-                  {vibe}
-                </button>
-              ))}
-            </div>
-            <div className="mt-8 flex justify-between">
-              <button onClick={() => setStep(3)} className="text-[#a0a0b0] hover:text-white font-medium px-4 py-2">Back</button>
-              <button disabled={!preferences.styleVibe} onClick={getRecommendations} className="flex items-center gap-2 bg-[#e94560] hover:bg-[#ff5c77] text-white px-8 py-3 rounded-xl font-bold disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(233,69,96,0.3)] hover:-translate-y-1">
-                Find My Style <Sparkles size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 5 && result && (
-          <div className="animate-in zoom-in-95 duration-500">
-            <div className="text-center mb-8">
-              <div className="inline-block bg-green-500/20 text-green-500 p-2 rounded-full mb-4">
-                <Check size={32} />
+      {/* Upload Section */}
+      {!result && (
+        <div className="bg-[#16213e] p-6 sm:p-10 rounded-3xl border border-white/5 relative overflow-hidden animate-fade-in">
+          {loading && (
+            <div className="absolute inset-0 bg-[#16213e]/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full border-4 border-[#e94560]/20 border-t-[#e94560] animate-spin" />
+                <Sparkles className="absolute inset-0 m-auto text-[#e94560]" size={24} />
               </div>
-              <h2 className="text-3xl font-bold text-white mb-2">Your Perfect Match</h2>
-              <p className="text-[#a0a0b0]">Based on your {preferences.faceShape} face shape and {preferences.hairType} hair.</p>
+              <p className="font-bold text-lg mt-6 animate-pulse text-[#eaeaea]">Analyzing your face shape...</p>
+              <p className="text-sm text-[#a0a0b0] mt-2">This may take a few seconds</p>
             </div>
+          )}
 
-            <div className="space-y-6">
-              <div className="bg-gradient-to-br from-[#1a1a2e] to-black rounded-2xl p-6 border border-white/5 relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 text-white/5">
-                  <Scissors size={120} />
+          <div className="flex flex-col items-center">
+            {/* Circular preview */}
+            <div
+              className="w-48 h-48 rounded-full border-4 border-dashed border-white/10 flex items-center justify-center overflow-hidden mb-6 relative group cursor-pointer hover:border-[#e94560]/50 transition-colors bg-black/20"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {imagePreview ? (
+                <>
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="text-white" size={32} />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center text-[#a0a0b0]">
+                  <Camera size={48} className="mb-2 opacity-50" />
+                  <span className="text-xs font-medium">Click to upload</span>
                 </div>
-                <h3 className="text-2xl font-bold text-[#e94560] mb-3 relative z-10">{result.recommendedStyle}</h3>
-                <p className="text-[#eaeaea] leading-relaxed relative z-10">{result.description}</p>
-              </div>
-
-              <div className="bg-black/30 rounded-2xl p-6 border border-white/5">
-                <h4 className="text-sm uppercase tracking-wider font-bold text-[#a0a0b0] mb-3 flex items-center gap-2">
-                  <Scissors size={16} /> Barber Instructions
-                </h4>
-                <p className="text-[#c0c0d0] font-mono text-sm leading-relaxed whitespace-pre-wrap">{result.barberInstructions}</p>
-              </div>
+              )}
             </div>
 
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <button onClick={attachToBooking} className="flex-1 flex justify-center items-center gap-2 bg-[#e94560] hover:bg-[#ff5c77] text-white px-6 py-4 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(233,69,96,0.3)] hover:-translate-y-1">
-                Save & Find Barber
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-all border border-white/10 mb-4"
+            >
+              <Upload size={18} />
+              {imagePreview ? 'Change Photo' : 'Upload Your Photo'}
+            </button>
+
+            <p className="text-xs text-[#a0a0b0] text-center mb-8 max-w-sm">
+              Upload a clear, front-facing photo for best results. JPG or PNG, max 10MB.
+            </p>
+
+            <button
+              onClick={analyzeFace}
+              disabled={!imageBase64 || loading}
+              className="flex items-center gap-2 bg-[#e94560] hover:bg-[#ff5c77] text-white px-8 py-4 rounded-xl font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(233,69,96,0.3)] hover:-translate-y-1 disabled:hover:translate-y-0 disabled:shadow-none"
+            >
+              <Sparkles size={20} />
+              Analyze My Face
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Results Section */}
+      {result && !saved && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Face Shape Badge */}
+          <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#e94560]/10 border border-[#e94560]/30 text-[#e94560] font-bold text-lg mb-3">
+              ✦ {result.faceShape} Face Shape
+            </div>
+            <p className="text-[#a0a0b0] max-w-lg mx-auto">{result.faceShapeDescription}</p>
+
+            {/* Photo thumbnail */}
+            {imagePreview && (
+              <div className="mt-4 flex justify-center">
+                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10">
+                  <img src={imagePreview} alt="Your face" className="w-full h-full object-cover" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recommendation Cards */}
+          <div>
+            <h2 className="text-xl font-bold text-[#eaeaea] mb-4 text-center">Recommended Styles for You</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {result.recommendations?.map((rec, index) => (
+                <div
+                  key={index}
+                  className={`bg-[#16213e] p-6 rounded-2xl border transition-all hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] ${
+                    selectedStyle?.styleName === rec.styleName
+                      ? 'border-[#e94560] shadow-[0_0_15px_rgba(233,69,96,0.2)]'
+                      : 'border-white/5 hover:border-white/20'
+                  }`}
+                >
+                  <h3 className="text-lg font-bold text-white mb-2">{rec.styleName}</h3>
+                  <p className="text-sm text-[#c0c0d0] leading-relaxed mb-3">{rec.description}</p>
+                  <div className="inline-block px-2 py-1 rounded bg-[#e94560]/10 border border-[#e94560]/20 text-xs font-medium text-[#e94560] mb-4">
+                    {rec.whySuited}
+                  </div>
+                  <button
+                    onClick={() => selectStyle(rec)}
+                    className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all bg-white/5 hover:bg-[#e94560] hover:text-white text-[#eaeaea] border border-white/10 hover:border-[#e94560]"
+                  >
+                    <Check size={16} />
+                    Select This Style
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Try Again */}
+          <div className="text-center">
+            <button
+              onClick={resetAll}
+              className="text-[#a0a0b0] hover:text-white text-sm font-medium transition-colors flex items-center gap-1 mx-auto"
+            >
+              <X size={14} /> Upload a different photo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Saved / Success State */}
+      {saved && selectedStyle && (
+        <div className="animate-scale-in">
+          <div className="bg-gradient-to-br from-[#16213e] to-[#e94560]/10 p-8 sm:p-10 rounded-3xl border border-[#e94560]/30 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 mb-4">
+              <Check size={32} className="text-green-500" />
+            </div>
+
+            <h2 className="text-2xl font-bold text-white mb-2">Style Saved!</h2>
+            <p className="text-[#a0a0b0] mb-6">Attach it to your next booking so your barber knows exactly what you want.</p>
+
+            <div className="bg-black/20 p-5 rounded-2xl border border-white/5 text-left mb-8 max-w-md mx-auto">
+              <div className="inline-flex items-center px-2 py-1 rounded bg-[#e94560]/10 border border-[#e94560]/20 text-xs font-bold text-[#e94560] uppercase tracking-wider mb-2">
+                ✦ {result?.faceShape} Face
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">{selectedStyle.styleName}</h3>
+              <p className="text-sm text-[#a0a0b0]">{selectedStyle.description}</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => navigate('/explore')}
+                className="flex items-center justify-center gap-2 bg-[#e94560] hover:bg-[#ff5c77] text-white px-8 py-4 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(233,69,96,0.3)] hover:-translate-y-1"
+              >
+                Book with This Style <ArrowRight size={18} />
               </button>
-              <button onClick={() => setStep(1)} className="flex-1 bg-white/5 hover:bg-white/10 text-white px-6 py-4 rounded-xl font-bold transition-all border border-white/10 text-center">
+              <button
+                onClick={resetAll}
+                className="bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-xl font-bold transition-all border border-white/10"
+              >
                 Try Again
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

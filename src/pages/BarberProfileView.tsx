@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Star, MapPin, Scissors, Clock, ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Camera, Clock, Eye, MapPin, Scissors, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { fileToCompressedJpegDataUrl } from '../lib/imageUpload';
+import toast from 'react-hot-toast';
 
 export default function BarberProfileView() {
-  const { user, userData } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [barber, setBarber] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchBarber = async () => {
@@ -20,8 +25,7 @@ export default function BarberProfileView() {
         const snap = await getDoc(doc(db, 'barbers', user.uid));
         if (snap.exists()) {
           setBarber(snap.data());
-          
-          // Fetch reviews
+
           const qReviews = query(collection(db, 'reviews'), where('barberId', '==', user.uid));
           const reviewSnap = await getDocs(qReviews);
           setReviews(reviewSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -34,6 +38,29 @@ export default function BarberProfileView() {
     };
     fetchBarber();
   }, [user]);
+
+  const handleHeaderImageChange = async (
+    e: ChangeEvent<HTMLInputElement>,
+    field: 'profileImageUrl' | 'coverImageUrl',
+    label: string,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      setUploading(true);
+      const imageDataUrl = await fileToCompressedJpegDataUrl(file);
+      await updateDoc(doc(db, 'barbers', user.uid), { [field]: imageDataUrl });
+      setBarber((current: any) => current ? { ...current, [field]: imageDataUrl } : current);
+      toast.success(`${label} updated`);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || `Failed to update ${label.toLowerCase()}`);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
 
   if (loading) {
     return (
@@ -82,25 +109,64 @@ export default function BarberProfileView() {
         </div>
       </div>
 
-      {/* Header Profile */}
       <div className="bg-[#16213e] rounded-3xl border border-white/5 overflow-hidden mb-8">
-        <div className="h-48 md:h-64 bg-gradient-to-br from-[#1a1a2e] to-black/50 relative">
-          {barber.portfolioImages && barber.portfolioImages.length > 0 && (
+        <div className="h-48 md:h-64 bg-gradient-to-br from-[#1a1a2e] to-black/50 relative group">
+          {barber.coverImageUrl ? (
+            <img src={barber.coverImageUrl} className="w-full h-full object-cover opacity-70" alt="Cover" />
+          ) : barber.portfolioImages && barber.portfolioImages.length > 0 ? (
             <img src={barber.portfolioImages[0]} className="w-full h-full object-cover opacity-50" alt="Cover" />
-          )}
+          ) : null}
           <div className="absolute inset-0 bg-gradient-to-t from-[#16213e] to-transparent"></div>
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            disabled={uploading}
+            className="absolute top-4 right-4 px-4 py-2 rounded-xl bg-black/50 border border-white/10 text-white text-sm font-medium backdrop-blur hover:bg-black/60 transition-colors"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Camera size={16} /> {barber.coverImageUrl ? 'Change Cover' : 'Upload Cover'}
+            </span>
+          </button>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => handleHeaderImageChange(e, 'coverImageUrl', 'Cover image')}
+          />
         </div>
-        
+
         <div className="px-6 md:px-10 pb-8 relative -mt-16">
           <div className="flex flex-col md:flex-row gap-6 md:items-end justify-between">
             <div className="flex flex-col">
-              <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-4xl font-bold text-white border-4 border-[#16213e] shadow-xl mb-4">
-                {barber.name?.charAt(0).toUpperCase()}
-              </div>
+              <button
+                type="button"
+                onClick={() => profileInputRef.current?.click()}
+                disabled={uploading}
+                className="group relative w-32 h-32 rounded-2xl overflow-hidden bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-4xl font-bold text-white border-4 border-[#16213e] shadow-xl mb-4"
+              >
+                {barber.profileImageUrl ? (
+                  <>
+                    <img src={barber.profileImageUrl} alt={barber.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera size={22} />
+                    </div>
+                  </>
+                ) : (
+                  barber.name?.charAt(0).toUpperCase()
+                )}
+              </button>
+              <input
+                ref={profileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => handleHeaderImageChange(e, 'profileImageUrl', 'Profile image')}
+              />
               <h1 className="text-3xl md:text-4xl font-bold text-white mb-1 tracking-tight">{barber.name}</h1>
               <p className="text-xl text-[#a0a0b0] font-medium">{barber.shopName}</p>
             </div>
-            
+
             <div className="flex flex-col md:items-end gap-4 mt-4 md:mt-0">
               <div className="flex gap-4">
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5 text-center px-6">
@@ -119,7 +185,6 @@ export default function BarberProfileView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left Column */}
         <div className="md:col-span-2 space-y-8">
           <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><MapPin size={20} className="text-[#e94560]" /> About & Location</h2>
@@ -145,7 +210,6 @@ export default function BarberProfileView() {
             </div>
           </div>
 
-          {/* Portfolio Gallery */}
           {barber.portfolioImages && barber.portfolioImages.length > 0 && (
             <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">📸 Portfolio</h2>
@@ -168,7 +232,7 @@ export default function BarberProfileView() {
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-1 text-[#f0a500]">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={16} className={i < review.rating ? "fill-current" : "text-white/10"} />
+                          <Star key={i} size={16} className={i < review.rating ? 'fill-current' : 'text-white/10'} />
                         ))}
                       </div>
                       <span className="text-xs text-[#a0a0b0]">
@@ -183,7 +247,6 @@ export default function BarberProfileView() {
           )}
         </div>
 
-        {/* Right Column (Availability) */}
         <div className="space-y-8">
           <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5 sticky top-24">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Clock size={20} className="text-[#e94560]" /> Opening Hours</h2>

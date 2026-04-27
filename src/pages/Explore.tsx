@@ -59,7 +59,9 @@ export default function Explore() {
           {barbers.map(barber => (
             <Link key={barber.id} to={`/barber/${barber.id}`} className="group bg-[#16213e] rounded-3xl border border-white/5 overflow-hidden hover:border-[#e94560]/50 transition-all hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
               <div className="aspect-video bg-black/50 relative overflow-hidden">
-                {barber.portfolioImages && barber.portfolioImages.length > 0 ? (
+                {barber.coverImageUrl ? (
+                  <img src={barber.coverImageUrl} alt={barber.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                ) : barber.portfolioImages && barber.portfolioImages.length > 0 ? (
                   <img src={barber.portfolioImages[0]} alt={barber.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -67,10 +69,19 @@ export default function Explore() {
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#16213e] to-transparent"></div>
-                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                  <div>
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end gap-3">
+                  <div className="flex items-end gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-white font-bold shrink-0 border border-white/10">
+                      {barber.profileImageUrl ? (
+                        <img src={barber.profileImageUrl} alt={barber.name} className="w-full h-full object-cover" />
+                      ) : (
+                        barber.name?.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
                     <h3 className="text-xl font-bold text-white leading-tight">{barber.name}</h3>
                     <p className="text-sm font-medium text-[#c0c0d0]">{barber.shopName}</p>
+                  </div>
                   </div>
                   <div className="bg-black/60 backdrop-blur px-2 py-1 rounded-lg flex items-center gap-1 text-sm font-bold text-[#f0a500]">
                     <Star size={14} className="fill-current" />

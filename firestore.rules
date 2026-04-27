@@ -16,15 +16,16 @@ service cloud.firestore {
     // Validation definitions
     function isUserSchemaValid(data) {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
-             data.keys().size() == 5 &&
+             (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['profileImageUrl']))) &&
              data.role in ['barber', 'customer'] &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.email is string && data.email.size() <= 100;
+             data.email is string && data.email.size() <= 100 &&
+             (!data.keys().hasAll(['profileImageUrl']) || data.profileImageUrl == null || (data.profileImageUrl is string && data.profileImageUrl.size() <= 500000));
     }
 
     function isBarberSchemaValid(data) {
       return data.keys().hasAll(['uid', 'name', 'shopName', 'location', 'bio', 'services', 'portfolioImages', 'availability', 'rating', 'totalReviews', 'isActive']) &&
-             data.keys().size() == 11 &&
+             data.keys().size() >= 11 && data.keys().size() <= 13 &&
              data.name is string && data.name.size() <= 100 &&
              data.shopName is string && data.shopName.size() <= 100 &&
              data.location is string && data.location.size() <= 200 &&
@@ -33,7 +34,9 @@ service cloud.firestore {
              data.portfolioImages is list && data.portfolioImages.size() <= 50 &&
              data.rating is number && data.rating >= 0 && data.rating <= 5 &&
              data.totalReviews is number && data.totalReviews >= 0 &&
-             data.isActive is bool;
+             data.isActive is bool &&
+             (!data.keys().hasAll(['profileImageUrl']) || data.profileImageUrl == null || (data.profileImageUrl is string && data.profileImageUrl.size() <= 500000)) &&
+             (!data.keys().hasAll(['coverImageUrl']) || data.coverImageUrl == null || (data.coverImageUrl is string && data.coverImageUrl.size() <= 500000));
     }
 
     function isBookingSchemaValid(data) {
@@ -69,10 +72,37 @@ service cloud.firestore {
              data.createdAt == request.time;
     }
 
+    function isValidStyleRecommendation(data) {
+      return data.keys().hasAll(['styleName', 'description', 'whySuited', 'referenceKeyword']) &&
+             data.keys().size() == 4 &&
+             data.styleName is string && data.styleName.size() > 0 && data.styleName.size() <= 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 1000 &&
+             data.whySuited is string && data.whySuited.size() > 0 && data.whySuited.size() <= 300 &&
+             data.referenceKeyword is string && data.referenceKeyword.size() > 0 && data.referenceKeyword.size() <= 100;
+    }
+
+    function isStyleMatchSchemaValid(data) {
+      return data.keys().hasAll(['userId', 'imageDataUrl', 'faceShape', 'faceShapeDescription', 'recommendations', 'selectedStyleName', 'selectedStyleDescription', 'updatedAt']) &&
+             data.keys().size() == 8 &&
+             data.userId == request.auth.uid &&
+             data.imageDataUrl is string && data.imageDataUrl.size() > 0 && data.imageDataUrl.size() <= 500000 &&
+             data.faceShape is string && data.faceShape.size() > 0 && data.faceShape.size() <= 100 &&
+             data.faceShapeDescription is string && data.faceShapeDescription.size() > 0 && data.faceShapeDescription.size() <= 500 &&
+             data.recommendations is list &&
+             data.recommendations.size() == 4 &&
+             isValidStyleRecommendation(data.recommendations[0]) &&
+             isValidStyleRecommendation(data.recommendations[1]) &&
+             isValidStyleRecommendation(data.recommendations[2]) &&
+             isValidStyleRecommendation(data.recommendations[3]) &&
+             (data.selectedStyleName == null || (data.selectedStyleName is string && data.selectedStyleName.size() <= 100)) &&
+             (data.selectedStyleDescription == null || (data.selectedStyleDescription is string && data.selectedStyleDescription.size() <= 1000)) &&
+             data.updatedAt == request.time;
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
       allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isUserSchemaValid(incoming()) && incoming().createdAt == request.time && incoming().uid == request.auth.uid;
-      allow update: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isUserSchemaValid(incoming()) && incoming().createdAt == existing().createdAt && incoming().uid == existing().uid && incoming().diff(existing()).affectedKeys().hasOnly(['name']);
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isUserSchemaValid(incoming()) && incoming().createdAt == existing().createdAt && incoming().uid == existing().uid && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'profileImageUrl']);
       allow list: if false; // PII isolated
     }
 
@@ -82,7 +112,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == barberId && isValidId(barberId) && isBarberSchemaValid(incoming()) && incoming().uid == request.auth.uid;
       allow update: if isSignedIn() && isValidId(barberId) && isBarberSchemaValid(incoming()) && incoming().uid == existing().uid &&
         (
-          (request.auth.uid == barberId && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'shopName', 'location', 'bio', 'services', 'portfolioImages', 'availability', 'isActive']))
+          (request.auth.uid == barberId && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'shopName', 'location', 'bio', 'services', 'portfolioImages', 'availability', 'isActive', 'profileImageUrl', 'coverImageUrl']))
           ||
           (incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'totalReviews']) && incoming().totalReviews == existing().totalReviews + 1)
         );
@@ -108,6 +138,15 @@ service cloud.firestore {
           // Barber updates status
           (existing().barberId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status in ['confirmed', 'completed', 'cancelled'] && existing().status != 'cancelled' && existing().status != 'completed')
         );
+    }
+
+    match /styleMatches/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isStyleMatchSchemaValid(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidId(userId) &&
+        existing().userId == request.auth.uid &&
+        isStyleMatchSchemaValid(incoming());
     }
 
     match /reviews/{reviewId} {

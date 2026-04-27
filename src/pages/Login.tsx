@@ -28,7 +28,8 @@ export default function Login() {
           name: result.user.displayName || 'Google User',
           email: result.user.email,
           role: 'customer',
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          profileImageUrl: result.user.photoURL || null
         });
       }
       

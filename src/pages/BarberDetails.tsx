@@ -69,7 +69,9 @@ export default function BarberDetails() {
       {/* Header Profile */}
       <div className="bg-[#16213e] rounded-3xl border border-white/5 overflow-hidden mb-8">
         <div className="h-48 md:h-64 bg-gradient-to-br from-[#1a1a2e] to-black/50 relative">
-          {barber.portfolioImages && barber.portfolioImages.length > 0 && (
+          {barber.coverImageUrl ? (
+            <img src={barber.coverImageUrl} className="w-full h-full object-cover opacity-70" alt="Cover" />
+          ) : barber.portfolioImages && barber.portfolioImages.length > 0 && (
             <img src={barber.portfolioImages[0]} className="w-full h-full object-cover opacity-50" alt="Cover" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#16213e] to-transparent"></div>
@@ -78,8 +80,12 @@ export default function BarberDetails() {
         <div className="px-6 md:px-10 pb-8 relative -mt-16">
           <div className="flex flex-col md:flex-row gap-6 md:items-end justify-between">
             <div className="flex flex-col">
-              <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-4xl font-bold text-white border-4 border-[#16213e] shadow-xl mb-4">
-                {barber.name.charAt(0).toUpperCase()}
+              <div className="w-32 h-32 rounded-2xl overflow-hidden bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-4xl font-bold text-white border-4 border-[#16213e] shadow-xl mb-4">
+                {barber.profileImageUrl ? (
+                  <img src={barber.profileImageUrl} alt={barber.name} className="w-full h-full object-cover" />
+                ) : (
+                  barber.name.charAt(0).toUpperCase()
+                )}
               </div>
               <h1 className="text-3xl md:text-4xl font-bold text-white mb-1 tracking-tight">{barber.name}</h1>
               <p className="text-xl text-[#a0a0b0] font-medium">{barber.shopName}</p>

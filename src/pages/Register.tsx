@@ -33,7 +33,8 @@ export default function Register() {
           name: user.displayName || 'Google User',
           email: user.email,
           role,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          profileImageUrl: user.photoURL || null
         });
       }
       
@@ -75,7 +76,8 @@ export default function Register() {
         name,
         email,
         role,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        profileImageUrl: null
       });
 
       await refreshUserData(user);

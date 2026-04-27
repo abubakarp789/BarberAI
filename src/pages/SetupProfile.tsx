@@ -1,22 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Clock, MapPin, Store, User as UserIcon, Scissors } from 'lucide-react';
+import { Camera, Clock, MapPin, Plus, Scissors, Store, Trash2 } from 'lucide-react';
+import { fileToCompressedJpegDataUrl } from '../lib/imageUpload';
 
 export default function SetupProfile() {
   const { user, userData } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
+
   const [shopName, setShopName] = useState('');
   const [location, setLocation] = useState('');
   const [bio, setBio] = useState('');
   const [services, setServices] = useState<{name: string, price: number}[]>([{ name: 'Standard Haircut', price: 30 }]);
   const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
-  
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [rating, setRating] = useState(0);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [isActive, setIsActive] = useState(true);
+
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
   const initialAvailability = {
     monday: { open: '09:00', close: '18:00', isClosed: false },
     tuesday: { open: '09:00', close: '18:00', isClosed: false },
@@ -38,20 +47,45 @@ export default function SetupProfile() {
         setShopName(data.shopName || '');
         setLocation(data.location || '');
         setBio(data.bio || '');
-        if (data.services) setServices(data.services);
-        if (data.portfolioImages) setPortfolioImages(data.portfolioImages);
-        if (data.availability) setAvailability(data.availability as any);
+        setServices(data.services || [{ name: 'Standard Haircut', price: 30 }]);
+        setPortfolioImages(data.portfolioImages || []);
+        setAvailability((data.availability as typeof initialAvailability) || initialAvailability);
+        setProfileImageUrl(data.profileImageUrl || null);
+        setCoverImageUrl(data.coverImageUrl || null);
+        setRating(data.rating || 0);
+        setTotalReviews(data.totalReviews || 0);
+        setIsActive(typeof data.isActive === 'boolean' ? data.isActive : true);
       }
     };
     fetchProfile();
   }, [user]);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleImagePick = async (
+    e: ChangeEvent<HTMLInputElement>,
+    setter: (value: string | null) => void,
+    label: string,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const imageDataUrl = await fileToCompressedJpegDataUrl(file);
+      setter(imageDataUrl);
+      toast.success(`${label} updated`);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || `Failed to update ${label.toLowerCase()}`);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !userData) return;
-    if (!shopName || !location || !bio) return toast.error("Please fill required fields");
-    if (services.length === 0) return toast.error("Add at least one service");
-    if (services.some(s => !s.name || s.price <= 0)) return toast.error("Valid services are required");
+    if (!shopName || !location || !bio) return toast.error('Please fill required fields');
+    if (services.length === 0) return toast.error('Add at least one service');
+    if (services.some(s => !s.name || s.price <= 0)) return toast.error('Valid services are required');
 
     try {
       setLoading(true);
@@ -62,18 +96,20 @@ export default function SetupProfile() {
         location,
         bio,
         services,
-        portfolioImages: [],
+        portfolioImages,
         availability,
-        rating: 0,
-        totalReviews: 0,
-        isActive: true
+        rating,
+        totalReviews,
+        isActive,
+        profileImageUrl,
+        coverImageUrl,
       }, { merge: true });
 
-      toast.success("Profile saved successfully");
+      toast.success('Profile saved successfully');
       navigate('/dashboard');
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Failed to save profile");
+      toast.error(error.message || 'Failed to save profile');
     } finally {
       setLoading(false);
     }
@@ -89,12 +125,14 @@ export default function SetupProfile() {
 
   const calculateCompleteness = () => {
     let score = 0;
-    if (shopName.trim() !== '') score += 20;
-    if (location.trim() !== '') score += 20;
+    if (shopName.trim() !== '') score += 15;
+    if (location.trim() !== '') score += 15;
     if (bio.trim() !== '') score += 15;
     if (services.length > 0 && services.some(s => s.name.trim() !== '' && s.price > 0)) score += 20;
     if (Object.values(availability).some((day: any) => !day.isClosed)) score += 15;
     if (portfolioImages.length > 0) score += 10;
+    if (profileImageUrl) score += 5;
+    if (coverImageUrl) score += 5;
     return score;
   };
   const completeness = calculateCompleteness();
@@ -114,16 +152,80 @@ export default function SetupProfile() {
         <div className="w-full bg-black/40 rounded-full h-2.5">
           <div className="bg-gradient-to-r from-[#e94560] to-purple-600 h-2.5 rounded-full transition-all duration-500 ease-out" style={{ width: `${completeness}%` }}></div>
         </div>
-        {completeness < 100 && (
-          <p className="text-xs text-[#a0a0b0] mt-3">
-            {portfolioImages.length === 0 && "• Add images to your portfolio to increase bookings (10%)\n"}
-            {bio.trim() === '' && "• Write a compelling bio (15%)\n"}
-          </p>
-        )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-8">
-        {/* Basic Info */}
+        <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Store size={20} className="text-[#e94560]" /> Profile Images</h2>
+
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm font-medium text-[#eaeaea] mb-3">Cover Image</p>
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="group relative w-full h-44 rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-[#1a1a2e] to-black/50 flex items-center justify-center"
+              >
+                {coverImageUrl ? (
+                  <>
+                    <img src={coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold gap-2">
+                      <Camera size={18} /> Change cover image
+                    </div>
+                  </>
+                ) : (
+                  <span className="flex items-center gap-2 text-[#a0a0b0]">
+                    <Camera size={18} /> Upload cover image
+                  </span>
+                )}
+              </button>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => handleImagePick(e, setCoverImageUrl, 'Cover image')}
+              />
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-[#eaeaea] mb-3">Profile Image</p>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => profileInputRef.current?.click()}
+                  className="group relative w-24 h-24 rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-3xl font-bold text-white"
+                >
+                  {profileImageUrl ? (
+                    <>
+                      <img src={profileImageUrl} alt={userData?.name} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Camera size={20} />
+                      </div>
+                    </>
+                  ) : (
+                    userData?.name?.charAt(0).toUpperCase()
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => profileInputRef.current?.click()}
+                  className="px-4 py-3 rounded-xl bg-black/20 border border-white/10 text-white font-medium hover:bg-white/5 transition-colors"
+                >
+                  {profileImageUrl ? 'Change profile image' : 'Upload profile image'}
+                </button>
+                <input
+                  ref={profileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleImagePick(e, setProfileImageUrl, 'Profile image')}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Store size={20} className="text-[#e94560]" /> Basic Information</h2>
           <div className="space-y-4">
@@ -147,7 +249,6 @@ export default function SetupProfile() {
           </div>
         </div>
 
-        {/* Services */}
         <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold flex items-center gap-2"><Scissors size={20} className="text-[#e94560]" /> Services</h2>
@@ -173,7 +274,6 @@ export default function SetupProfile() {
           </div>
         </div>
 
-        {/* Availability */}
         <div className="bg-[#16213e] p-6 sm:p-8 rounded-3xl border border-white/5">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Clock size={20} className="text-[#e94560]" /> Availability</h2>
           <div className="space-y-4">

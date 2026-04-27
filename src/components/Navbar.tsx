@@ -45,8 +45,6 @@ export default function Navbar() {
             </Link>
             
             <div className="hidden md:flex gap-6 items-center">
-              <Link to="/explore" className="text-[#a0a0b0] hover:text-white transition-colors">Explore</Link>
-              <div className="h-4 w-px bg-white/20"></div>
               <Link to="/login" className="text-[#eaeaea] hover:text-white font-medium">Login</Link>
               <Link to="/register" className="bg-[#e94560] text-white px-5 py-2 rounded-full font-medium hover:bg-[#ff5c77] transition-all transform hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(233,69,96,0.3)]">
                 Register
@@ -62,7 +60,6 @@ export default function Navbar() {
         {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="md:hidden bg-[#16213e] border-b border-white/10 px-4 py-4 flex flex-col gap-4">
-            <Link to="/explore" onClick={() => setMobileMenuOpen(false)} className="text-[#a0a0b0]">Explore</Link>
             <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="text-[#eaeaea]">Login</Link>
             <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="bg-[#e94560] text-center text-white px-5 py-2 rounded-xl font-medium">Register</Link>
           </div>
@@ -122,8 +119,12 @@ export default function Navbar() {
         
         <div className="mt-auto p-6 border-t border-white/5">
           <div className="flex items-center gap-3 mb-6 px-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-white font-bold">
-              {userData.name.charAt(0).toUpperCase()}
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#e94560] to-purple-600 flex items-center justify-center text-white font-bold">
+              {userData.profileImageUrl ? (
+                <img src={userData.profileImageUrl} alt={userData.name} className="w-full h-full object-cover" />
+              ) : (
+                userData.name.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="overflow-hidden">
               <p className="text-sm font-medium truncate text-[#eaeaea]">{userData.name}</p>

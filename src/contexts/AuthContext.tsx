@@ -9,6 +9,7 @@ interface UserData {
   email: string;
   role: 'barber' | 'customer';
   createdAt: string;
+  profileImageUrl?: string | null;
 }
 
 interface AuthContextType {

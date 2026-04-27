@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Scissors, Sparkles, Compass, CalendarCheck, ArrowRight, Star, Check } from 'lucide-react';
+import { Scissors, Sparkles, Compass, CalendarCheck, ArrowRight } from 'lucide-react';
 import heroImg from '../assets/hero.png';
 
 export default function Landing() {
@@ -99,25 +99,64 @@ export default function Landing() {
         </div>
       </div>
       
-      {/* Event Footer */}
-      <footer className="border-t border-white/5 bg-black/40 backdrop-blur-md relative z-10 py-12 text-center">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#e94560]/30 bg-[#e94560]/10 text-[#e94560] font-medium text-sm mb-4">
-            <Sparkles size={16} />
-            <span>Built for AI Seekho 2026</span>
+      <footer className="relative z-10 border-t border-white/5 bg-[radial-gradient(circle_at_top,rgba(233,69,96,0.16),transparent_35%),linear-gradient(180deg,rgba(0,0,0,0.62),rgba(0,0,0,0.88))] backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr_1fr]">
+            <div>
+              <div className="inline-flex items-center gap-3 text-white font-bold text-2xl tracking-tight mb-5">
+                <div className="bg-[#e94560]/10 p-2.5 rounded-2xl border border-[#e94560]/20">
+                  <Scissors className="text-[#e94560]" size={24} />
+                </div>
+                BarberAI
+              </div>
+              <p className="text-[#c0c0d0] max-w-xl leading-relaxed mb-6">
+                BarberAI blends AI-powered style analysis, trusted barber discovery, and modern appointment booking into one premium grooming experience.
+              </p>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#e94560]/30 bg-[#e94560]/10 text-[#e94560] font-medium text-sm">
+                <span>Built for AI Seekho 2026</span>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[#a0a0b0] mb-5">Quick Links</h3>
+              <div className="flex flex-col gap-3">
+                <Link to="/register" className="text-white hover:text-[#ff5c77] transition-colors">Register as Barber</Link>
+                <Link to="/login" className="text-white hover:text-[#ff5c77] transition-colors">Customer Login</Link>
+                <a
+                  href="https://goo.gle/aiseekho2026"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white hover:text-[#ff5c77] transition-colors"
+                >
+                  AI Seekho 2026
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[#a0a0b0] mb-5">Created By</h3>
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+                <p className="text-2xl font-bold text-white mb-1">Abu Bakar</p>
+                <p className="text-[#a0a0b0] mb-5">Creator of BarberAI.</p>
+                <div className="space-y-3 text-sm">
+                  <a href="mailto:abubakarp789@gmail.com" className="block text-[#eaeaea] hover:text-[#ff5c77] transition-colors">
+                    abubakarp789@gmail.com
+                  </a>
+                  <a href="https://linkedin.com/in/abubakar56" target="_blank" rel="noopener noreferrer" className="block text-[#eaeaea] hover:text-[#ff5c77] transition-colors">
+                    linkedin.com/in/abubakar56
+                  </a>
+                  <a href="https://github.com/abubakarp789" target="_blank" rel="noopener noreferrer" className="block text-[#eaeaea] hover:text-[#ff5c77] transition-colors">
+                    github.com/abubakarp789
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold mb-2 text-white">#VibeKaregaPakistan</h2>
-          <p className="text-[#a0a0b0] mb-6 max-w-lg mx-auto">
-            This project was proudly created as part of the AI Seekho initiative.
-          </p>
-          <a 
-            href="https://rsvp.withgoogle.com/events/aiseekho2026" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-[#e94560] hover:text-[#ff5c77] font-semibold transition-colors"
-          >
-            View Event Details <ArrowRight size={16} />
-          </a>
+
+          <div className="mt-12 pt-6 border-t border-white/10 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-[#8f92a8]">BarberAI © 2026. Built in Pakistan</p>
+            <p className="text-sm text-[#8f92a8]">AI-powered style analysis. Human barbers. Better decisions before the chair.</p>
+          </div>
         </div>
       </footer>
     </div>
